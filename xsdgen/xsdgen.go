@@ -359,11 +359,11 @@ func (cfg *Config) expandComplexTypes(types []xsd.Type) []xsd.Type {
 // type that the user wants included in the Go source. In affect, what we
 // want to do is take the linked list:
 //
-// 	t1 -> t2 -> t3 -> builtin
+//	t1 -> t2 -> t3 -> builtin
 //
 // And produce a set of tuples:
 //
-// 	t1 -> builtin, t2 -> builtin, t3 -> builtin
+//	t1 -> builtin, t2 -> builtin, t3 -> builtin
 //
 // This is a heuristic that tends to generate better-looking Go code.
 func (cfg *Config) flatten(types map[xml.Name]xsd.Type) []xsd.Type {
@@ -700,9 +700,10 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 	if t.TopLevel && cfg.applyXMLNameToTopLevelElementTypes {
 		tag := ""
 		if t.Name.Space == "" {
-			tag = fmt.Sprintf(`xml:"%s"`, t.Name.Local)
+			tag = fmt.Sprintf(`xml:"%s" json:"%s" db:"%s"`, t.Name.Local, t.Name.Local, t.Name.Local)
 		} else {
-			tag = fmt.Sprintf(`xml:"%s %s"`, t.Name.Space, t.Name.Local)
+			tag = fmt.Sprintf(`xml:"%s %s" json:"%s" db:"%s"`, t.Name.Space, t.Name.Local, t.Name.Local, t.Name.Local)
+
 		}
 		fields = append(fields, ast.NewIdent("XMLName"), ast.NewIdent("xml.Name"), gen.String(tag))
 	}
@@ -715,9 +716,10 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 
 		tag := ""
 		if el.Form == xsd.FormOptionQualified || t.Name.Space != el.Name.Space {
-			tag = fmt.Sprintf(`xml:"%s %s%s"`, el.Name.Space, el.Name.Local, options)
+			tag = fmt.Sprintf(`xml:"%s %s%s" json:"%s%s" db:"%s"`, el.Name.Space, el.Name.Local, options, el.Name.Local, options, el.Name.Local)
+
 		} else {
-			tag = fmt.Sprintf(`xml:"%s%s"`, el.Name.Local, options)
+			tag = fmt.Sprintf(`xml:"%s%s" json:"%s%s" db:"%s"`, el.Name.Local, options, el.Name.Local, options, el.Name.Local)
 		}
 
 		base, err := cfg.expr(el.Type)
@@ -739,6 +741,8 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 		}
 		if el.Plural {
 			base = &ast.ArrayType{Elt: base}
+		} else if el.Nillable || el.Optional {
+			base = &ast.StarExpr{X: base}
 		}
 		fields = append(fields, name, base, gen.String(tag))
 		if el.Default != "" || nonTrivialBuiltin(el.Type) {
@@ -768,9 +772,9 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 		}
 		var tag string
 		if attr.Form == xsd.FormOptionQualified {
-			tag = fmt.Sprintf(`xml:"%s %s,attr%s"`, attr.Name.Space, attr.Name.Local, options)
+			tag = fmt.Sprintf(`xml:"%s %s,attr%s" json:"%s%s" db:"%s"`, attr.Name.Space, attr.Name.Local, options, attr.Name.Local, options, attr.Name.Local)
 		} else {
-			tag = fmt.Sprintf(`xml:"%s,attr%s"`, attr.Name.Local, options)
+			tag = fmt.Sprintf(`xml:"%s,attr%s" json:"%s%s" db:"%s"`, attr.Name.Local, options, attr.Name.Local, options, attr.Name.Local)
 		}
 		base, err := cfg.expr(attr.Type)
 		if err != nil {
@@ -1042,7 +1046,7 @@ func (cfg *Config) genSimpleListSpec(t *xsd.SimpleType) ([]spec, error) {
 			}
 			return nil
 		`)
-	case xsd.Decimal, xsd.Double:
+	case xsd.Float, xsd.Decimal, xsd.Double:
 		marshalFn = marshalFn.Body(`
 			result := make([][]byte, 0, len(*x))
 			for _, v := range *x {

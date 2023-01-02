@@ -78,13 +78,13 @@ func Imports(data []byte) ([]Ref, error) {
 // Normalize reads XML schema documents and returns xml trees
 // for each schema with the following properties:
 //
-// * various XSD shorthand, such as omitting <complexContent>,
-//   are expanded into their canonical forms.
-// * all links are dereferenced by merging the linked element.
-// * all types have names. For anonymous types, unique (per
-//   namespace) names of the form "_anon1", "_anon2", etc are
-//   generated, and the attribute "_isAnonymous" is set to
-//   "true".
+//   - various XSD shorthand, such as omitting <complexContent>,
+//     are expanded into their canonical forms.
+//   - all links are dereferenced by merging the linked element.
+//   - all types have names. For anonymous types, unique (per
+//     namespace) names of the form "_anon1", "_anon2", etc are
+//     generated, and the attribute "_isAnonymous" is set to
+//     "true".
 //
 // Because one document may contain more than one schema, the
 // number of trees returned by Normalize may not equal the
@@ -144,14 +144,14 @@ func Parse(docs ...[]byte) ([]Schema, error) {
 		return nil, err
 	}
 
-	for _, root := range schema {
+	for i, root := range schema {
 		tns := root.Attr("", "targetNamespace")
 		efd := parseForm(root.Attr("", "elementFormDefault"), FormOptionUndefined)
 		afd := parseForm(root.Attr("", "attributeFormDefault"), FormOptionUndefined)
 
 		s := Schema{TargetNS: tns, ElementFormDefault: efd, AttributeFormDefault: afd, Types: make(map[xml.Name]Type)}
 		if err := s.parse(root); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%v: %d", err, i)
 		}
 		parsed[tns] = s
 	}
@@ -190,19 +190,25 @@ func anonTypeName(n int, ns string) xml.Name {
 	return xml.Name{ns, fmt.Sprintf("_anon%d", n)}
 }
 
-/* Convert
+/*
+	Convert
+
 <element name="foo">
-  <complexType>
-  ...
-  </complexType>
+
+	<complexType>
+	...
+	</complexType>
+
 </element>
 
 to
 
 <element name="foo" type="foo">
-  <complexType name="foo">
-  ...
-  </complexType>
+
+	<complexType name="foo">
+	...
+	</complexType>
+
 </element>
 */
 func copyEltNamesToAnonTypes(root *xmltree.Element) {
@@ -291,27 +297,27 @@ func setChoicesOptional(root *xmltree.Element) error {
 /*
 Convert
 
-  <xs:complexType name="foo" base="xs:anyType"/>
-    <xs:sequence>
-      <xs:element name="a">
-        <xs:simpleType base="xs:int">
-          ...
-        </xs:simpleType>
-      </xs:element>
-    </xs:sequence>
-  </xs:complexType>
+	<xs:complexType name="foo" base="xs:anyType"/>
+	  <xs:sequence>
+	    <xs:element name="a">
+	      <xs:simpleType base="xs:int">
+	        ...
+	      </xs:simpleType>
+	    </xs:element>
+	  </xs:sequence>
+	</xs:complexType>
 
 to
 
-  <xs:complexType name="foo" base="xs:anyType"/>
-    <xs:sequence>
-      <xs:element name="a">
-        <xs:simpleType name="_anon1" _isAnonymous="true" base="xs:int">
-          ...
-        </xs:simpleType>
-      </xs:element>
-    </xs:sequence>
-  </xs:complexType>
+	<xs:complexType name="foo" base="xs:anyType"/>
+	  <xs:sequence>
+	    <xs:element name="a">
+	      <xs:simpleType name="_anon1" _isAnonymous="true" base="xs:int">
+	        ...
+	      </xs:simpleType>
+	    </xs:element>
+	  </xs:sequence>
+	</xs:complexType>
 */
 func nameAnonymousTypes(root *xmltree.Element, typeCounter *int) error {
 	var (
@@ -369,20 +375,18 @@ func nameAnonymousTypes(root *xmltree.Element, typeCounter *int) error {
 }
 
 /*
-
 Dereference all ref= links within a document.
 
-  <attribute name="id" type="xsd:ID" />
-  <complexType name="MyType">
-    <attribute ref="tns:id" />
-  </complexType>
+	<attribute name="id" type="xsd:ID" />
+	<complexType name="MyType">
+	  <attribute ref="tns:id" />
+	</complexType>
 
 becomes
 
-  <complexType name="MyType">
-    <attribute name="id" type="xsd:ID" />
-  </complexType>
-
+	<complexType name="MyType">
+	  <attribute name="id" type="xsd:ID" />
+	</complexType>
 */
 func flattenRef(schema []*xmltree.Element) error {
 	var (
@@ -462,6 +466,9 @@ func deref(ref, real *xmltree.Element) *xmltree.Element {
 	for _, attr := range ref.StartElement.Attr {
 		if (attr.Name == xml.Name{"", "ref"}) {
 			el.SetAttr("", "name", attr.Value)
+		} else if (attr.Name == xml.Name{"", "type"}) {
+			// don't override
+			el.Attr(attr.Name.Space, attr.Name.Local)
 		} else {
 			el.SetAttr(attr.Name.Space, attr.Name.Local, attr.Value)
 		}
@@ -565,11 +572,11 @@ func (s *Schema) addElementTypeAliases(root *xmltree.Element, types map[xml.Name
 // English. My translation may be incorrect; check the reference if you
 // think so. The rules are as follows:
 //
-// 	- When extending a complex type, the derived type *must* be mixed iff
-//    the base type is mixed.
-// 	- When restricting a complex type, the derived type *may* be mixed iff
-//    the base type is mixed.
-// 	- The builtin "xs:anyType" is mixed.
+//   - When extending a complex type, the derived type *must* be mixed iff
+//     the base type is mixed.
+//   - When restricting a complex type, the derived type *may* be mixed iff
+//     the base type is mixed.
+//   - The builtin "xs:anyType" is mixed.
 //
 // This package extends the concept of "Mixed" to apply to complex types
 // with simpleContent. This is done because Mixed is used as an indicator
@@ -628,7 +635,7 @@ func attributeDefaultType(root *xmltree.Element) {
 
 // 3.3.2 XML Representation of Element Declaration Schema Components
 //
-// Elements types default to anyType
+// # Elements types default to anyType
 //
 // https://www.w3.org/TR/xmlschema-1/#Element_Declaration_details
 func elementDefaultType(root *xmltree.Element) {
@@ -639,6 +646,9 @@ func elementDefaultType(root *xmltree.Element) {
 		anyType   = xml.Name{Space: schemaNS, Local: "anyType"}
 	)
 	for _, el := range root.SearchFunc(and(isElement, hasNoType, hasNoRef)) {
+		if hasAnonymousType(el) {
+			continue
+		}
 		el.SetAttr("", "type", el.Prefix(anyType))
 	}
 }
