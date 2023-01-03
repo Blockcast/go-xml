@@ -566,6 +566,7 @@ type fieldOverride struct {
 	DefaultValue     string
 	Type             xsd.Type
 	Tag              string
+	Optional         bool
 }
 
 type nameGenerator struct {
@@ -741,7 +742,7 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 		}
 		if el.Plural {
 			base = &ast.ArrayType{Elt: base}
-		} else if el.Nillable || el.Optional {
+		} else if el.Optional {
 			base = &ast.StarExpr{X: base}
 		}
 		fields = append(fields, name, base, gen.String(tag))
@@ -762,6 +763,7 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 				Tag:          tag,
 				ToType:       typeName,
 				Type:         el.Type,
+				Optional:     el.Optional,
 			})
 		}
 	}
@@ -800,6 +802,7 @@ func (cfg *Config) genComplexType(t *xsd.ComplexType) ([]spec, error) {
 				Tag:          tag,
 				ToType:       typeName,
 				Type:         attr.Type,
+				//Optional:     attr.Optional,
 			})
 		}
 	}
@@ -850,7 +853,7 @@ func (cfg *Config) genComplexTypeMethods(t *xsd.ComplexType, overrides []fieldOv
 			}
 			overlay.T = (*T)(t)
 			{{range .Overrides}}
-			overlay.{{.FieldName}} = (*{{.ToType}})(&overlay.T.{{.FieldName}})
+			overlay.{{.FieldName}} = (*{{.ToType}})({{if not .Optional -}}&{{end -}}overlay.T.{{.FieldName}})
 			{{if .DefaultValue -}}
 			// overlay.{{.FieldName}} = {{.DefaultValue}}
 			{{end -}}
@@ -890,7 +893,7 @@ func (cfg *Config) genComplexTypeMethods(t *xsd.ComplexType, overrides []fieldOv
 			}
 			layout.T = (*T)(t)
 			{{- range .Overrides}}
-			layout.{{.FieldName}} = (*{{.ToType}})(&layout.T.{{.FieldName}})
+			layout.{{.FieldName}} = (*{{.ToType}})({{if not .Optional -}}&{{end -}}layout.T.{{.FieldName}})
 			{{end -}}
 
 			return e.EncodeElement(layout, start)
